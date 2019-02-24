@@ -42,4 +42,26 @@ val dfSentence = dfTransformed.select("index","label","title","sentence").as[Rec
 
 dfSentence.write.parquet(s"s3a://$ACCESS_KEY:$SECRET_KEY@$BUCKET_NAME/news_array")
 
+//convert to bert input format
+val parquetPath = s"s3a://$ACCESS_KEY:$SECRET_KEY@$BUCKET_NAME/news_array/"
+val textPath = s"s3a://$ACCESS_KEY:$SECRET_KEY@$BUCKET_NAME/news_text/"
+val df_fromParquet = spark.read.parquet(parquetPath)
+
+case class SequenceRecord(index: String, label: String, title: String, sentence: Seq[String])
+
+val k = 3
+
+val df_reliable = df_fromParquet.filter($"label"==="reliable")
+val df_fake = df_fromParquet.filter($"label"=!="reliable")
+
+val rdd_bert_reliable = df_reliable.select("index","label","title","sentence").as[SequenceRecord]
+.rdd.map(r => (r.title+:r.sentence.slice(0,k):+"1").mkString("\t")+"\n")
+
+val rdd_bert_fake = df_fake.select("index","label","title","sentence").as[SequenceRecord]
+.rdd.map(r => (r.title+:r.sentence.slice(0,k):+"0").mkString("\t")+"\n")
+
+rdd_bert_reliable.repartition(1).saveAsTextFile(textPath+"reliable")
+rdd_bert_fake.repartition(1).saveAsTextFile(textPath+"fake")
+
+
 
