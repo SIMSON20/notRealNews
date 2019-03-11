@@ -54,14 +54,56 @@ val k = 3
 val df_reliable = df_fromParquet.filter($"label"==="reliable")
 val df_fake = df_fromParquet.filter($"label"=!="reliable")
 
-val rdd_bert_reliable = df_reliable.select("index","label","title","sentence").as[SequenceRecord]
-.rdd.map(r => (r.title+:r.sentence.slice(0,k):+"1").mkString("\t")+"\n")
+case class SequenceRecord(index: String, label: String, title: String, sentence: Seq[String])
 
-val rdd_bert_fake = df_fake.select("index","label","title","sentence").as[SequenceRecord]
-.rdd.map(r => (r.title+:r.sentence.slice(0,k):+"0").mkString("\t")+"\n")
+val k = 3
 
-rdd_bert_reliable.repartition(1).saveAsTextFile(textPath+"reliable")
-rdd_bert_fake.repartition(1).saveAsTextFile(textPath+"fake")
+val df_reliable = df_fromParquet.filter($"label"==="reliable")
+val df_fake = df_fromParquet.filter($"label"=!="reliable")
+
+val df_reliable_transformed = df_reliable.select("index","label","title","sentence").as[SequenceRecord]
+.rdd.map(r => 
+         (((r.title+".")+:r.sentence.slice(0,k)).mkString("").replaceAll("\t+", " ").replaceAll("\n+", "").replaceAll("\\.+", "."),1))
+.toDF("text","label")
+
+val df_fake_transformed = df_fake.select("index","label","title","sentence").as[SequenceRecord]
+.rdd.map(r =>  
+         (((r.title+".")+:r.sentence.slice(0,k)).mkString("").replaceAll("\t+", " ").replaceAll("\n+", "").replaceAll("\\.+", "."),0))
+.toDF("text","label")
+
+df_reliable_transformed.repartition(1).write.option("delimiter","\t").mode("overwrite").csv(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/news_text_tsv/reliable")
+//.saveAsTextFile(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/news_text_cui1/reliable")
+df_fake_transformed.repartition(1).write.option("delimiter","\t").mode("overwrite").csv(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/news_text_tsv/fake")
+//.saveAsTextFile(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/news_text_cui1/fake")
+case class SequenceRecord(index: String, label: String, title: String, sentence: Seq[String])
+
+val k = 3
+
+val df_reliable = df_fromParquet.filter($"label"==="reliable")
+val df_fake = df_fromParquet.filter($"label"=!="reliable")
+
+val df_reliable_transformed = df_reliable.select("index","label","title","sentence").as[SequenceRecord]
+.rdd.map(r => 
+         (((r.title+".")+:r.sentence.slice(0,k)).mkString("").replaceAll("\t+", " ").replaceAll("\n+", "").replaceAll("\\.+", "."),1))
+.toDF("text","label")
+
+val df_fake_transformed = df_fake.select("index","label","title","sentence").as[SequenceRecord]
+.rdd.map(r =>  
+         (((r.title+".")+:r.sentence.slice(0,k)).mkString("").replaceAll("\t+", " ").replaceAll("\n+", "").replaceAll("\\.+", "."),0))
+.toDF("text","label")
+
+df_reliable_transformed.repartition(1).write.option("delimiter","\t").mode("overwrite").csv(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/news_text_tsv/reliable")
+//.saveAsTextFile(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/news_text_cui1/reliable")
+df_fake_transformed.repartition(1).write.option("delimiter","\t").mode("overwrite").csv(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/news_text_tsv/fake")
+//.saveAsTextFile(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/news_text_cui1/fake")
+
+val test = splits_reliable(0).union(splits_fake(0))
+val validate = splits_reliable(1).union(splits_fake(1))
+val train = splits_reliable(2).union(splits_fake(2))
+
+test.repartition(1).write.option("delimiter","\t").mode("overwrite").csv(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/splits/news_tsv/test")
+validate.repartition(1).write.option("delimiter","\t").mode("overwrite").csv(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/splits/news_tsv/validate")
+train.repartition(1).write.option("delimiter","\t").mode("overwrite").csv(s"s3a://$ACCESS_KEY:$ENCODED_SECRET_KEY@$BUCKET_NAME/splits/news_tsv/train")
 
 
 
